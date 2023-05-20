@@ -22,7 +22,8 @@ interface AutoFrontMatterSettings {
 
 const DEFAULT_SETTINGS: AutoFrontMatterSettings = {
 	autoAliasFromName: false,
-	autoAliasPathMatch: ":name, :descriptor",
+	autoAliasPathMatch:
+		"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?",
 	autoTagFromFolder: false,
 };
 
