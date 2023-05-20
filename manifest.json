@@ -1,11 +1,10 @@
 {
-	"id": "obsidian-sample-plugin",
-	"name": "Sample Plugin",
+	"id": "obsidian-auto-frontmatter",
+	"name": "Auto Frontmatter Plugin",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Auto generate aliases, tags and custom values in frontmatter.",
+	"author": "Jahred Hope",
+	"authorUrl": "https://jahred.me",
 	"isDesktopOnly": false
 }
