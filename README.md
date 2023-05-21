@@ -4,9 +4,16 @@
 
 This is a plugin for Obsidian (https://obsidian.md).
 
-**Why "Fore"?** Fore, meaning "Located at or toward the front" is in reference to updating frontmatter.
+![Context Menu Commands](assets/context-menu-commands.png)
 
-But it's also a nice short name to put in the context menu.
+-   Add and Remove Tags for entire folders of files
+-   Add Aliases and Tags with commands and hotkeys
+-   Automate Aliases from file name conventions
+-   Automate Tags from folder structure
+
+![Commands](assets/command-pallete-commands.png)
+
+**Why "Fore"?** Fore, meaning "Located at or toward the front" is in reference to updating frontmatter. But it's also a nice short name to put in the context menu.
 
 ### Set Alias from Name
 
