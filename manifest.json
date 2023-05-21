@@ -3,7 +3,7 @@
 	"name": "Fore",
 	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "Auto generate aliases, tags and custom values in frontmatter.",
+	"description": "Frontmatter automation for Obsidian",
 	"author": "Jahred Hope",
 	"authorUrl": "https://jahred.me",
 	"isDesktopOnly": false

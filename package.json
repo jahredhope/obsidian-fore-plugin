@@ -2,7 +2,7 @@
 	"name": "obsidian-fore",
 	"version": "1.0.0",
 	"private": true,
-	"description": "Auto generate aliases, tags and custom values in frontmatter Obsidian (https://obsidian.md)",
+	"description": "Frontmatter automation for Obsidian",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
