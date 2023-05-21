@@ -1,10 +1,10 @@
-import AutoFrontMatter from "main";
+import ForePlugin from "main";
 import { PluginSettingTab, App, Setting } from "obsidian";
 
 export class AutoFrontmatterSettingTab extends PluginSettingTab {
-	plugin: AutoFrontMatter;
+	plugin: ForePlugin;
 
-	constructor(app: App, plugin: AutoFrontMatter) {
+	constructor(app: App, plugin: ForePlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}

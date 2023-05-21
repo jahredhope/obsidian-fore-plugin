@@ -1,3 +1,3 @@
-import { AutoFrontMatter } from "./src/plugin";
+import { ForePlugin } from "./src/plugin";
 
-export default AutoFrontMatter;
+export default ForePlugin;

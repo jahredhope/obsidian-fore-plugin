@@ -1,6 +1,6 @@
 {
-	"id": "obsidian-auto-frontmatter",
-	"name": "Auto Frontmatter Plugin",
+	"id": "obsidian-fore",
+	"name": "Fore",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Auto generate aliases, tags and custom values in frontmatter.",

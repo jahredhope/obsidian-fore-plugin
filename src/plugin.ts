@@ -1,6 +1,7 @@
 import {
 	Editor,
 	MarkdownView,
+	Menu,
 	parseFrontMatterAliases,
 	Plugin,
 	TFile,
@@ -8,57 +9,43 @@ import {
 import { dirname } from "path";
 import { createMatcher } from "src/matcher";
 import { AutoFrontmatterSettingTab } from "src/settings";
+import { FileSystemObject, walk } from "./files";
 import {
 	formatToTagName,
 	getUsedKey,
 	parseFrontMatterTagsRaw,
 } from "./frontmatter";
+import { UserEnteredTextModal } from "./modal";
+import { formatAsTag } from "./tags";
 
-interface AutoFrontMatterSettings {
+interface ForePluginSettings {
 	autoAliasFromName: boolean;
+	autoAliasEvenWhenExisting: boolean;
 	autoAliasPathMatch: string;
 	autoTagFromFolder: boolean;
 }
 
-const DEFAULT_SETTINGS: AutoFrontMatterSettings = {
+const DEFAULT_SETTINGS: ForePluginSettings = {
 	autoAliasFromName: false,
+	autoAliasEvenWhenExisting: false,
 	autoAliasPathMatch:
 		"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?",
 	autoTagFromFolder: false,
 };
 
-export class AutoFrontMatter extends Plugin {
-	settings: AutoFrontMatterSettings;
+export class ForePlugin extends Plugin {
+	settings: ForePluginSettings;
 
 	async onload() {
 		await this.loadSettings();
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText("Auto  - Status Bar Text");
-
 		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, file: TFile) => {
-				if (!file.basename) {
-					// Is a directory
-					return;
+			this.app.workspace.on(
+				"file-menu",
+				(menu, abstract: FileSystemObject) => {
+					this.onFileMenu(menu, abstract);
 				}
-				menu.addItem((item) => {
-					item.setTitle("Update Tags from Path")
-						.setIcon("document")
-						.onClick(async () => {
-							this.updateTagsFromPath(file);
-						});
-				});
-
-				menu.addItem((item) => {
-					item.setTitle("Update Alias from Name")
-						.setIcon("document")
-						.onClick(async () => {
-							this.updateAliasFromFilename(file);
-						});
-				});
-			})
+			)
 		);
 
 		this.registerEvent(
@@ -87,22 +74,79 @@ export class AutoFrontMatter extends Plugin {
 			},
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new AutoFrontmatterSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, "click", (evt: MouseEvent) => {
-			console.log("click", evt);
+		this.addCommand({
+			id: "add-alias-to-frontmatter",
+			name: "Add Alias to Frontmatter",
+			editorCallback: (_editor: Editor, view: MarkdownView) => {
+				new UserEnteredTextModal(this.app, "Alias", (value) => {
+					this.addAlias(view.file, value, true);
+				}).open();
+			},
 		});
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(
-			window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000)
-		);
+		this.addCommand({
+			id: "add-tag-to-frontmatter",
+			name: "Add Tag to Frontmatter",
+			editorCallback: (_editor: Editor, view: MarkdownView) => {
+				new UserEnteredTextModal(this.app, "Tag", (value) => {
+					this.addTag(view.file, value);
+				}).open();
+			},
+		});
+
+		// This adds a settings tab so the user can configure various aspects of the plugin
+		this.addSettingTab(new AutoFrontmatterSettingTab(this.app, this));
 	}
 
 	onunload() {}
+
+	private onFileMenu(menu: Menu, abstract: FileSystemObject) {
+		menu.addItem((item) => {
+			item.setTitle("Fore: Add Tag")
+				.setIcon("document")
+				.onClick(async () => {
+					new UserEnteredTextModal(this.app, "Tag", (value) => {
+						for (const file of walk(abstract)) {
+							this.addTag(file, value);
+						}
+					}).open();
+				});
+		});
+
+		menu.addItem((item) => {
+			item.setTitle("Fore: Remove Tag")
+				.setIcon("document")
+				.onClick(async () => {
+					new UserEnteredTextModal(this.app, "Tag", (value) => {
+						for (const file of walk(abstract)) {
+							this.removeTag(file, value);
+						}
+					}).open();
+				});
+		});
+
+		menu.addItem((item) => {
+			item.setTitle("Fore: Auto Update Tags")
+				.setIcon("document")
+				.onClick(async () => {
+					for (const file of walk(abstract)) {
+						this.updateTagsFromPath(file);
+					}
+				});
+		});
+
+		menu.addItem((item) => {
+			item.setTitle("Fore: Auto Update Alias")
+				.setIcon("document")
+				.onClick(async () => {
+					for (const file of walk(abstract)) {
+						this.updateAliasFromFilename(file);
+					}
+				});
+		});
+
+		menu.addSeparator();
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -131,9 +175,10 @@ export class AutoFrontMatter extends Plugin {
 				const key = getUsedKey(frontmatter, ["tag", "tags"]);
 				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
 				const tags = parseFrontMatterTagsRaw(frontmatter);
-				if (!tags.includes(tag)) {
-					console.log(`Adding ${tag} as tag`);
-					tags.push(tag);
+				const formattedTag = formatAsTag(tag);
+				if (!tags.includes(formattedTag)) {
+					console.log(`Adding ${formattedTag} as tag`);
+					tags.push(formattedTag);
 				}
 				frontmatter[key] = formatAsCommaSeparated
 					? tags.join(", ")
@@ -142,10 +187,34 @@ export class AutoFrontMatter extends Plugin {
 		);
 	}
 
+	removeTag(file: TFile, tag: string) {
+		this.app.fileManager.processFrontMatter(
+			file,
+			(frontmatter: Record<string, unknown>) => {
+				const key = getUsedKey(frontmatter, ["tag", "tags"]);
+				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
+				const tags = parseFrontMatterTagsRaw(frontmatter);
+				const index = tags.findIndex(
+					(existingTag) => existingTag === tag
+				);
+				if (index === -1) return;
+
+				tags.splice(index, 1);
+
+				if (tags.length === 0) {
+					delete frontmatter[key];
+				} else {
+					frontmatter[key] = formatAsCommaSeparated
+						? tags.join(", ")
+						: tags;
+				}
+			}
+		);
+	}
+
 	updateAliasFromFilename(file: TFile) {
 		if (!this.settings.autoAliasPathMatch) return;
 
-		//"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?"
 		const getValuesFromName = createMatcher(
 			this.settings.autoAliasPathMatch
 		);
@@ -162,13 +231,21 @@ export class AutoFrontMatter extends Plugin {
 		this.addAlias(file, values.name);
 	}
 
-	addAlias(file: TFile, alias: string) {
+	addAlias(file: TFile, alias: string, force = false) {
 		this.app.fileManager.processFrontMatter(
 			file,
 			(frontmatter: Record<string, unknown>) => {
 				const key = getUsedKey(frontmatter, ["alias", "aliases"]);
 				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
 				const aliases = parseFrontMatterAliases(frontmatter) || [];
+				if (
+					!force &&
+					!this.settings.autoAliasEvenWhenExisting &&
+					aliases.length > 0
+				) {
+					console.log("Alias already exists");
+					return;
+				}
 				if (!aliases.includes(alias)) {
 					console.log(`Adding ${alias} as alias`);
 					aliases.push(alias);
