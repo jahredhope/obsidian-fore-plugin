@@ -20,18 +20,28 @@ Describe your file naming convention using [parameterized path] or regular expre
 
 [parameterized path]: https://www.npmjs.com/package/path-to-regexp
 
-Example:
+#### Example:
 
 ```
 {:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?
 ```
 
-E.g. "2020-03-39 - Meeting - Product Roadmap" => Alias: Product Roadmap
+**with Date and Kind**
+
+```
+"2020-03-39 - Meeting - Product Roadmap" => Alias: Product Roadmap
+```
+
+**with Kind and Descriptor**
+
+```
 E.g. "Tool - Skaffold, Kubernetes Deployment" => Alias: Skaffold"
+```
 
 ## Set Tag from File Path
 
 Automatically add tags in a document's frontmatter that matches the files path.
 
 E.g. Tool/Skaffold.md => `#tool`
+
 E.g. Person/Jimmy/Articles => `#Person/Jimmy`
