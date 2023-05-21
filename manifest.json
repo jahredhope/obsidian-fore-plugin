@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-fore",
 	"name": "Fore",
-	"version": "1.0.0",
+	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Auto generate aliases, tags and custom values in frontmatter.",
 	"author": "Jahred Hope",
