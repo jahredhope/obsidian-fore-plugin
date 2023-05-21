@@ -26,12 +26,12 @@ Example:
 {:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?
 ```
 
-E.g. "2020-03-39 - Meeting - Product Roadmap" => "Product Roadmap"
-E.g. "Tool - Skaffold, Kubernetes Deployment" => "Skaffold"
+E.g. "2020-03-39 - Meeting - Product Roadmap" => Alias: Product Roadmap
+E.g. "Tool - Skaffold, Kubernetes Deployment" => Alias: Skaffold"
 
 ## Set Tag from File Path
 
-Automatically add tags in a documents frontmatter that matches the files path.
+Automatically add tags in a document's frontmatter that matches the files path.
 
-E.g. Tool/Skaffold.md => "#tool"
-E.g. Person/Jimmy/Articles => "#Person/Jimmy"
+E.g. Tool/Skaffold.md => `#tool`
+E.g. Person/Jimmy/Articles => `#Person/Jimmy`
