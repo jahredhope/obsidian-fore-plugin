@@ -1,22 +1,19 @@
 import { App, Modal, Setting } from "obsidian";
 
+interface UserEnteredTextOptions {
+	field: string;
+	callToAction: string;
+}
+
 export class UserEnteredTextModal extends Modal {
 	result: string;
 
 	constructor(
 		app: App,
-		private field: string,
+		private options: UserEnteredTextOptions,
 		private onSubmit: (result: string) => void
 	) {
 		super(app);
-	}
-
-	submit() {
-		this.close();
-		this.onSubmit(this.result);
-	}
-	exit() {
-		this.close();
 	}
 
 	onOpen() {
@@ -27,15 +24,12 @@ export class UserEnteredTextModal extends Modal {
 			event.preventDefault();
 			event.stopPropagation();
 		});
-		this.scope.register([], "esc", (event: KeyboardEvent) => {
-			this.close();
-			event.preventDefault();
-			event.stopPropagation();
+
+		contentEl.createEl("h2", {
+			text: `${this.options.callToAction} ${this.options.field}`,
 		});
 
-		contentEl.createEl("h2", { text: `Add ${this.field}` });
-
-		new Setting(contentEl).setName(this.field).addText((text) =>
+		new Setting(contentEl).setName(this.options.field).addText((text) =>
 			text.onChange((value) => {
 				this.result = value;
 			})
@@ -43,7 +37,7 @@ export class UserEnteredTextModal extends Modal {
 
 		new Setting(contentEl).addButton((btn) =>
 			btn
-				.setButtonText("Add")
+				.setButtonText(this.options.callToAction)
 				.setCta()
 				.onClick(() => {
 					this.submit();
@@ -54,5 +48,10 @@ export class UserEnteredTextModal extends Modal {
 	onClose() {
 		const { contentEl } = this;
 		contentEl.empty();
+	}
+
+	private submit() {
+		this.close();
+		this.onSubmit(this.result);
 	}
 }

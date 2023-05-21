@@ -1,6 +1,21 @@
 import ForePlugin from "main";
 import { PluginSettingTab, App, Setting } from "obsidian";
 
+export interface ForePluginSettings {
+	autoAliasFromName: boolean;
+	autoAliasEvenWhenExisting: boolean;
+	autoAliasPathMatch: string;
+	autoTagFromFolder: boolean;
+}
+
+export const DEFAULT_SETTINGS: ForePluginSettings = {
+	autoAliasFromName: false,
+	autoAliasEvenWhenExisting: false,
+	autoAliasPathMatch:
+		"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?",
+	autoTagFromFolder: false,
+};
+
 export class AutoFrontmatterSettingTab extends PluginSettingTab {
 	plugin: ForePlugin;
 

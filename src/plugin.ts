@@ -8,7 +8,11 @@ import {
 } from "obsidian";
 import { dirname } from "path";
 import { createMatcher } from "src/matcher";
-import { AutoFrontmatterSettingTab } from "src/settings";
+import {
+	AutoFrontmatterSettingTab,
+	DEFAULT_SETTINGS,
+	ForePluginSettings,
+} from "src/settings";
 import { FileSystemObject, walk } from "./files";
 import {
 	formatToTagName,
@@ -18,26 +22,19 @@ import {
 import { UserEnteredTextModal } from "./modal";
 import { formatAsTag } from "./tags";
 
-interface ForePluginSettings {
-	autoAliasFromName: boolean;
-	autoAliasEvenWhenExisting: boolean;
-	autoAliasPathMatch: string;
-	autoTagFromFolder: boolean;
+interface Logger {
+	log: (...params: unknown[]) => void;
 }
-
-const DEFAULT_SETTINGS: ForePluginSettings = {
-	autoAliasFromName: false,
-	autoAliasEvenWhenExisting: false,
-	autoAliasPathMatch:
-		"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?",
-	autoTagFromFolder: false,
-};
+const DEBUGGING = false;
+const logger: Logger = DEBUGGING ? console : { log: () => {} };
 
 export class ForePlugin extends Plugin {
 	settings: ForePluginSettings;
 
-	async onload() {
+	public async onload() {
 		await this.loadSettings();
+
+		this.addSettingTab(new AutoFrontmatterSettingTab(this.app, this));
 
 		this.registerEvent(
 			this.app.workspace.on(
@@ -49,8 +46,18 @@ export class ForePlugin extends Plugin {
 		);
 
 		this.registerEvent(
+			this.app.vault.on("create", (file: TFile) => {
+				logger.log("File Renamed", { basename: file.basename });
+				if (this.settings.autoTagFromFolder)
+					this.updateTagsFromPath(file);
+				if (this.settings.autoAliasFromName)
+					this.updateAliasFromFilename(file);
+			})
+		);
+
+		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile) => {
-				console.log("File Renamed", { basename: file.basename });
+				logger.log("File Renamed", { basename: file.basename });
 				if (this.settings.autoTagFromFolder)
 					this.updateTagsFromPath(file);
 				if (this.settings.autoAliasFromName)
@@ -78,9 +85,13 @@ export class ForePlugin extends Plugin {
 			id: "add-alias-to-frontmatter",
 			name: "Add Alias to Frontmatter",
 			editorCallback: (_editor: Editor, view: MarkdownView) => {
-				new UserEnteredTextModal(this.app, "Alias", (value) => {
-					this.addAlias(view.file, value, true);
-				}).open();
+				new UserEnteredTextModal(
+					this.app,
+					{ field: "Alias", callToAction: "Add" },
+					(value) => {
+						this.addAlias(view.file, value, true);
+					}
+				).open();
 			},
 		});
 
@@ -88,28 +99,33 @@ export class ForePlugin extends Plugin {
 			id: "add-tag-to-frontmatter",
 			name: "Add Tag to Frontmatter",
 			editorCallback: (_editor: Editor, view: MarkdownView) => {
-				new UserEnteredTextModal(this.app, "Tag", (value) => {
-					this.addTag(view.file, value);
-				}).open();
+				new UserEnteredTextModal(
+					this.app,
+					{ field: "Tag", callToAction: "Add" },
+					(value) => {
+						this.addTag(view.file, value);
+					}
+				).open();
 			},
 		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new AutoFrontmatterSettingTab(this.app, this));
 	}
 
-	onunload() {}
+	public onunload() {}
 
 	private onFileMenu(menu: Menu, abstract: FileSystemObject) {
 		menu.addItem((item) => {
 			item.setTitle("Fore: Add Tag")
 				.setIcon("document")
 				.onClick(async () => {
-					new UserEnteredTextModal(this.app, "Tag", (value) => {
-						for (const file of walk(abstract)) {
-							this.addTag(file, value);
+					new UserEnteredTextModal(
+						this.app,
+						{ field: "Tag", callToAction: "Add" },
+						(value) => {
+							for (const file of walk(abstract)) {
+								this.addTag(file, value);
+							}
 						}
-					}).open();
+					).open();
 				});
 		});
 
@@ -117,11 +133,15 @@ export class ForePlugin extends Plugin {
 			item.setTitle("Fore: Remove Tag")
 				.setIcon("document")
 				.onClick(async () => {
-					new UserEnteredTextModal(this.app, "Tag", (value) => {
-						for (const file of walk(abstract)) {
-							this.removeTag(file, value);
+					new UserEnteredTextModal(
+						this.app,
+						{ field: "Tag", callToAction: "Remove" },
+						(value) => {
+							for (const file of walk(abstract)) {
+								this.removeTag(file, value);
+							}
 						}
-					}).open();
+					).open();
 				});
 		});
 
@@ -148,7 +168,7 @@ export class ForePlugin extends Plugin {
 		menu.addSeparator();
 	}
 
-	async loadSettings() {
+	private async loadSettings() {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
@@ -156,11 +176,11 @@ export class ForePlugin extends Plugin {
 		);
 	}
 
-	async saveSettings() {
+	public async saveSettings() {
 		await this.saveData(this.settings);
 	}
 
-	updateTagsFromPath(file: TFile) {
+	private updateTagsFromPath(file: TFile) {
 		const tagFromPath = formatToTagName(dirname(file.path));
 		if (!tagFromPath) {
 			return;
@@ -168,7 +188,7 @@ export class ForePlugin extends Plugin {
 		this.addTag(file, tagFromPath);
 	}
 
-	addTag(file: TFile, tag: string) {
+	private addTag(file: TFile, tag: string) {
 		this.app.fileManager.processFrontMatter(
 			file,
 			(frontmatter: Record<string, unknown>) => {
@@ -177,7 +197,7 @@ export class ForePlugin extends Plugin {
 				const tags = parseFrontMatterTagsRaw(frontmatter);
 				const formattedTag = formatAsTag(tag);
 				if (!tags.includes(formattedTag)) {
-					console.log(`Adding ${formattedTag} as tag`);
+					logger.log(`Adding ${formattedTag} as tag`);
 					tags.push(formattedTag);
 				}
 				frontmatter[key] = formatAsCommaSeparated
@@ -187,7 +207,7 @@ export class ForePlugin extends Plugin {
 		);
 	}
 
-	removeTag(file: TFile, tag: string) {
+	private removeTag(file: TFile, tag: string) {
 		this.app.fileManager.processFrontMatter(
 			file,
 			(frontmatter: Record<string, unknown>) => {
@@ -212,7 +232,7 @@ export class ForePlugin extends Plugin {
 		);
 	}
 
-	updateAliasFromFilename(file: TFile) {
+	private updateAliasFromFilename(file: TFile) {
 		if (!this.settings.autoAliasPathMatch) return;
 
 		const getValuesFromName = createMatcher(
@@ -220,18 +240,18 @@ export class ForePlugin extends Plugin {
 		);
 		const values = getValuesFromName(file.basename);
 		if (!values || !values.name) {
-			console.log("No name found");
+			logger.log("No name found");
 			return;
 		}
 		if (values.name === file.basename) {
-			console.log("Name is the same as full name");
+			logger.log("Name is the same as full name");
 			return;
 		}
 
 		this.addAlias(file, values.name);
 	}
 
-	addAlias(file: TFile, alias: string, force = false) {
+	private addAlias(file: TFile, alias: string, force = false) {
 		this.app.fileManager.processFrontMatter(
 			file,
 			(frontmatter: Record<string, unknown>) => {
@@ -243,11 +263,11 @@ export class ForePlugin extends Plugin {
 					!this.settings.autoAliasEvenWhenExisting &&
 					aliases.length > 0
 				) {
-					console.log("Alias already exists");
+					logger.log("Alias already exists");
 					return;
 				}
 				if (!aliases.includes(alias)) {
-					console.log(`Adding ${alias} as alias`);
+					logger.log(`Adding ${alias} as alias`);
 					aliases.push(alias);
 				}
 				frontmatter[key] = formatAsCommaSeparated
