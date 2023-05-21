@@ -2,20 +2,28 @@
 
 **Note:** This project is only intended for personal use and is not feature complete.
 
-This is a plugin for Obsidian (https://obsidian.md).
-
-<img alt="Example: Context Menu Commands" src="assets/context-menu-commands.png" />
-
 -   Add and Remove Tags for entire folders of files
 -   Add Aliases and Tags with commands and hotkeys
 -   Automate Aliases from file name conventions
 -   Automate Tags from folder structure
 
-<img alt="Example: Commands" src="assets/command-pallete-commands.png" />
+This is a plugin for Obsidian (https://obsidian.md).
+
+<img alt="Example: Context Menu Commands" src="assets/context-menu-commands.png" />
 
 **Why "Fore"?** Fore, meaning "Located at or toward the front" is in reference to updating frontmatter. But it's also a nice short name to put in the context menu.
 
 <img alt="Example: Options" src="assets/fore-plugin-options.png" />
+
+## How to Install
+
+Currently this plugin is not published to Obsidian.
+
+To trial it now install and use [BRAT], following the steps listed entering the below URL when prompted:
+
+```
+https://github.com/jahredhope/obsidian-fore-plugin
+```
 
 ### Set Alias from Name
 
