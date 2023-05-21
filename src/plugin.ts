@@ -19,7 +19,7 @@ import {
 	getUsedKey,
 	parseFrontMatterTagsRaw,
 } from "./frontmatter";
-import { UserEnteredTextModal } from "./modal";
+import { ReplaceTagModal, UserEnteredTextModal } from "./modal";
 import { formatAsTag } from "./tags";
 
 interface Logger {
@@ -48,9 +48,9 @@ export class ForePlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("create", (file: TFile) => {
 				logger.log("File Renamed", { basename: file.basename });
-				if (this.settings.autoTagFromFolder)
+				if (this.settings.tagFromFolderOnRename)
 					this.updateTagsFromPath(file);
-				if (this.settings.autoAliasFromName)
+				if (this.settings.aliasFromNameOnRename)
 					this.updateAliasFromFilename(file);
 			})
 		);
@@ -58,9 +58,9 @@ export class ForePlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile) => {
 				logger.log("File Renamed", { basename: file.basename });
-				if (this.settings.autoTagFromFolder)
+				if (this.settings.tagFromFolderOnRename)
 					this.updateTagsFromPath(file);
-				if (this.settings.autoAliasFromName)
+				if (this.settings.aliasFromNameOnRename)
 					this.updateAliasFromFilename(file);
 			})
 		);
@@ -113,6 +113,8 @@ export class ForePlugin extends Plugin {
 	public onunload() {}
 
 	private onFileMenu(menu: Menu, abstract: FileSystemObject) {
+		menu.addSeparator();
+
 		menu.addItem((item) => {
 			item.setTitle("Fore: Add Tag")
 				.setIcon("document")
@@ -146,25 +148,40 @@ export class ForePlugin extends Plugin {
 		});
 
 		menu.addItem((item) => {
-			item.setTitle("Fore: Auto Update Tags")
+			item.setTitle("Fore: Replace Tag")
 				.setIcon("document")
 				.onClick(async () => {
-					for (const file of walk(abstract)) {
-						this.updateTagsFromPath(file);
-					}
+					new ReplaceTagModal(this.app, ({ oldTag, newTag }) => {
+						for (const file of walk(abstract)) {
+							this.removeTag(file, oldTag, newTag);
+						}
+					}).open();
 				});
 		});
 
-		menu.addItem((item) => {
-			item.setTitle("Fore: Auto Update Alias")
-				.setIcon("document")
-				.onClick(async () => {
-					for (const file of walk(abstract)) {
-						this.updateAliasFromFilename(file);
-					}
-				});
-		});
+		if (this.settings.enableTagsFromFolder) {
+			menu.addItem((item) => {
+				item.setTitle("Fore: Auto Update Tags")
+					.setIcon("document")
+					.onClick(async () => {
+						for (const file of walk(abstract)) {
+							this.updateTagsFromPath(file);
+						}
+					});
+			});
+		}
 
+		if (this.settings.enableAliasFromName) {
+			menu.addItem((item) => {
+				item.setTitle("Fore: Auto Update Alias")
+					.setIcon("document")
+					.onClick(async () => {
+						for (const file of walk(abstract)) {
+							this.updateAliasFromFilename(file);
+						}
+					});
+			});
+		}
 		menu.addSeparator();
 	}
 
@@ -196,10 +213,14 @@ export class ForePlugin extends Plugin {
 				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
 				const tags = parseFrontMatterTagsRaw(frontmatter);
 				const formattedTag = formatAsTag(tag);
-				if (!tags.includes(formattedTag)) {
-					logger.log(`Adding ${formattedTag} as tag`);
-					tags.push(formattedTag);
+
+				if (tags.includes(formattedTag)) {
+					return;
 				}
+
+				logger.log(`Adding ${formattedTag} as tag`);
+				tags.push(formattedTag);
+
 				frontmatter[key] = formatAsCommaSeparated
 					? tags.join(", ")
 					: tags;
@@ -207,7 +228,7 @@ export class ForePlugin extends Plugin {
 		);
 	}
 
-	private removeTag(file: TFile, tag: string) {
+	private removeTag(file: TFile, tag: string, newTag?: string) {
 		this.app.fileManager.processFrontMatter(
 			file,
 			(frontmatter: Record<string, unknown>) => {
@@ -219,7 +240,12 @@ export class ForePlugin extends Plugin {
 				);
 				if (index === -1) return;
 
-				tags.splice(index, 1);
+				if (newTag) {
+					const formattedNewTag = formatAsTag(newTag);
+					tags.splice(index, 1, formattedNewTag);
+				} else {
+					tags.splice(index, 1);
+				}
 
 				if (tags.length === 0) {
 					delete frontmatter[key];

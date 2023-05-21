@@ -2,18 +2,22 @@ import ForePlugin from "main";
 import { PluginSettingTab, App, Setting } from "obsidian";
 
 export interface ForePluginSettings {
-	autoAliasFromName: boolean;
+	aliasFromNameOnRename: boolean;
 	autoAliasEvenWhenExisting: boolean;
 	autoAliasPathMatch: string;
-	autoTagFromFolder: boolean;
+	tagFromFolderOnRename: boolean;
+	enableTagsFromFolder: boolean;
+	enableAliasFromName: boolean;
 }
 
 export const DEFAULT_SETTINGS: ForePluginSettings = {
-	autoAliasFromName: false,
+	aliasFromNameOnRename: false,
 	autoAliasEvenWhenExisting: false,
 	autoAliasPathMatch:
 		"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?",
-	autoTagFromFolder: false,
+	enableAliasFromName: true,
+	enableTagsFromFolder: false,
+	tagFromFolderOnRename: false,
 };
 
 export class AutoFrontmatterSettingTab extends PluginSettingTab {
@@ -32,13 +36,25 @@ export class AutoFrontmatterSettingTab extends PluginSettingTab {
 		containerEl.createEl("h2", { text: "Auto Front Matter Settings" });
 
 		new Setting(containerEl)
+			.setName("Enable Alias from File Name")
+			.setDesc("Enabled creating Aliases from the File Name")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableTagsFromFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.enableTagsFromFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
 			.setName("Add Alias from Filename on Rename")
 			.setDesc("Regexp or Path Matcher to look for name")
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.autoAliasFromName)
+					.setValue(this.plugin.settings.aliasFromNameOnRename)
 					.onChange(async (value) => {
-						this.plugin.settings.autoAliasFromName = value;
+						this.plugin.settings.aliasFromNameOnRename = value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -57,12 +73,24 @@ export class AutoFrontmatterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Add Tag from Folder on Rename")
+			.setName("Enable Tags from Folder Structure")
+			.setDesc("Enabled creating Tags from the Folder Structure")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.enableTagsFromFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.enableTagsFromFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Update Tag from Folder on Rename")
 			.addToggle((toggle) => {
 				toggle
-					.setValue(this.plugin.settings.autoTagFromFolder)
+					.setValue(this.plugin.settings.tagFromFolderOnRename)
 					.onChange(async (value) => {
-						this.plugin.settings.autoTagFromFolder = value;
+						this.plugin.settings.tagFromFolderOnRename = value;
 						await this.plugin.saveSettings();
 					});
 			});
