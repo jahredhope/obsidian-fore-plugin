@@ -51,7 +51,7 @@ export class ForePlugin extends Plugin {
 				if (this.settings.tagFromFolderOnRename)
 					this.updateTagsFromPath(file);
 				if (this.settings.aliasFromNameOnRename)
-					this.updateAliasFromFilename(file);
+					this.updateAliasFromFilename(file, { override: false });
 			})
 		);
 
@@ -61,14 +61,26 @@ export class ForePlugin extends Plugin {
 				if (this.settings.tagFromFolderOnRename)
 					this.updateTagsFromPath(file);
 				if (this.settings.aliasFromNameOnRename)
-					this.updateAliasFromFilename(file);
+					this.updateAliasFromFilename(file, { override: false });
 			})
 		);
+		this.updateCommands();
+	}
 
+	public onunload() {}
+
+	private updateCommands() {
 		this.addCommand({
 			id: "update-tags-from-path",
 			name: "Update Tags from File Path",
-			editorCallback: (_editor: Editor, view: MarkdownView) => {
+			editorCheckCallback: (
+				checking,
+				_editor: Editor,
+				view: MarkdownView
+			) => {
+				if (checking) {
+					return this.settings.enableTagsFromFolder;
+				}
 				this.updateTagsFromPath(view.file);
 			},
 		});
@@ -76,8 +88,15 @@ export class ForePlugin extends Plugin {
 		this.addCommand({
 			id: "update-alias-from-name",
 			name: "Update Alias from File Name",
-			editorCallback: (_editor: Editor, view: MarkdownView) => {
-				this.updateAliasFromFilename(view.file);
+			editorCheckCallback: (
+				checking,
+				_editor: Editor,
+				view: MarkdownView
+			) => {
+				if (checking) {
+					return this.settings.enableAliasFromName;
+				}
+				this.updateAliasFromFilename(view.file, { override: true });
 			},
 		});
 
@@ -109,8 +128,6 @@ export class ForePlugin extends Plugin {
 			},
 		});
 	}
-
-	public onunload() {}
 
 	private onFileMenu(menu: Menu, abstract: FileSystemObject) {
 		menu.addSeparator();
@@ -177,7 +194,9 @@ export class ForePlugin extends Plugin {
 					.setIcon("document")
 					.onClick(async () => {
 						for (const file of walk(abstract)) {
-							this.updateAliasFromFilename(file);
+							this.updateAliasFromFilename(file, {
+								override: false,
+							});
 						}
 					});
 			});
@@ -258,7 +277,10 @@ export class ForePlugin extends Plugin {
 		);
 	}
 
-	private updateAliasFromFilename(file: TFile) {
+	private updateAliasFromFilename(
+		file: TFile,
+		{ override }: { override: boolean }
+	) {
 		if (!this.settings.autoAliasPathMatch) return;
 
 		const getValuesFromName = createMatcher(
@@ -274,7 +296,7 @@ export class ForePlugin extends Plugin {
 			return;
 		}
 
-		this.addAlias(file, values.name);
+		this.addAlias(file, values.name, override);
 	}
 
 	private addAlias(file: TFile, alias: string, force = false) {

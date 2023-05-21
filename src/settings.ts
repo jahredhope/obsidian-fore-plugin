@@ -11,7 +11,7 @@ export interface ForePluginSettings {
 }
 
 export const DEFAULT_SETTINGS: ForePluginSettings = {
-	aliasFromNameOnRename: false,
+	aliasFromNameOnRename: true,
 	autoAliasEvenWhenExisting: false,
 	autoAliasPathMatch:
 		"{:date(\\d\\d\\d\\d-\\d\\d-\\d\\d) - }?{:kind - }?{:name}{, :descriptor}?",
@@ -33,23 +33,25 @@ export class AutoFrontmatterSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Auto Front Matter Settings" });
+		containerEl.createEl("h2", { text: "Fore Settings" });
+
+		containerEl.createEl("h3", { text: "Alias from File Name" });
 
 		new Setting(containerEl)
-			.setName("Enable Alias from File Name")
-			.setDesc("Enabled creating Aliases from the File Name")
+			.setName("Enable")
+			.setDesc("Enable creating Aliases from the File Name")
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.enableTagsFromFolder)
+					.setValue(this.plugin.settings.enableAliasFromName)
 					.onChange(async (value) => {
-						this.plugin.settings.enableTagsFromFolder = value;
+						this.plugin.settings.enableAliasFromName = value;
 						await this.plugin.saveSettings();
 					})
 			);
 
 		new Setting(containerEl)
-			.setName("Add Alias from Filename on Rename")
-			.setDesc("Regexp or Path Matcher to look for name")
+			.setName("Update on Rename")
+			.setDesc("Update Alias if it doesn't exist")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.aliasFromNameOnRename)
@@ -60,7 +62,19 @@ export class AutoFrontmatterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Auto Alias Path Matcher")
+			.setName("Override existing")
+			.setDesc("Update alias even if it exists")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoAliasEvenWhenExisting)
+					.onChange(async (value) => {
+						this.plugin.settings.autoAliasEvenWhenExisting = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Path")
 			.setDesc("Regexp or Path Matcher to look for name")
 			.addText((text) =>
 				text
@@ -72,9 +86,11 @@ export class AutoFrontmatterSettingTab extends PluginSettingTab {
 					})
 			);
 
+		containerEl.createEl("h3", { text: "Tags from Folder Structure" });
+
 		new Setting(containerEl)
-			.setName("Enable Tags from Folder Structure")
-			.setDesc("Enabled creating Tags from the Folder Structure")
+			.setName("Enable")
+			.setDesc("Enable creating Tags from the Folder Structure")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.enableTagsFromFolder)
@@ -85,7 +101,7 @@ export class AutoFrontmatterSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Update Tag from Folder on Rename")
+			.setName("Update on Rename")
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.tagFromFolderOnRename)
