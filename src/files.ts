@@ -1,21 +1,19 @@
-import { TFile, TFolder } from "obsidian";
-
-export type FileSystemObject = TFile | TFolder;
+import { TAbstractFile, TFile, TFolder } from "obsidian";
 
 /**
- * Walks the given folder, yielding to every file found. Will yield once on a file.
+ * Walks the given folder, yielding to every file found.
+ *
+ * If given a file, will yield that file
  *
  * Useful for performing an action on every file in a directory.
- *
- * @param file Either a TFile or TFolder
  */
-export function* walk(file: FileSystemObject): Generator<TFile> {
-	if ("basename" in file) {
+export function* walk(file: TAbstractFile): Generator<TFile> {
+	if (file instanceof TFile) {
 		yield file;
 	}
-	if ("children" in file) {
+	if (file instanceof TFolder) {
 		for (const child of file.children) {
-			yield* walk(child as FileSystemObject);
+			yield* walk(child);
 		}
 	}
 }
