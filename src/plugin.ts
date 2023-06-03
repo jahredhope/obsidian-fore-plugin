@@ -1,327 +1,162 @@
+import { App, Plugin, TAbstractFile, TFile } from "obsidian";
 import {
-	Editor,
-	MarkdownView,
-	Menu,
-	parseFrontMatterAliases,
-	Plugin,
-	TFile,
-} from "obsidian";
-import { dirname } from "path";
-import { createMatcher } from "src/matcher";
-import {
-	AutoFrontmatterSettingTab,
-	DEFAULT_SETTINGS,
-	ForePluginSettings,
+  AutoFrontmatterSettingTab,
+  DEFAULT_SETTINGS,
+  ForePluginSettings,
 } from "src/settings";
-import { FileSystemObject, walk } from "./files";
-import {
-	formatToTagName,
-	getUsedKey,
-	parseFrontMatterTagsRaw,
-} from "./frontmatter";
-import { ReplaceTagModal, UserEnteredTextModal } from "./modal";
-import { formatAsTag } from "./tags";
+import { changeFrontmatter } from "./change-frontmatter";
+import { registerCommands } from "./register-commands";
+import { changesFromFilename } from "./automatic-values";
+import { logger } from "./logger";
+import { registerEvents } from "./register-events";
+import { UpdateTagModal } from "./update-tag-modal";
+import { walk } from "./walk-files";
 
-interface Logger {
-	log: (...params: unknown[]) => void;
+export interface Context {
+  app: App;
+  dispatch: (event: ChangeEvent) => void;
+  settings: ForePluginSettings;
 }
-const DEBUGGING = false;
-const logger: Logger = DEBUGGING ? console : { log: () => {} };
+
+export type ChangeEvent =
+  | {
+      type: "sort";
+    }
+  | {
+      type: "add-tag";
+      value: string;
+    }
+  | {
+      type: "remove-tag";
+      value: string;
+    }
+  | {
+      type: "replace-tag";
+      value: string;
+      oldValue: string;
+    }
+  | { type: "set-alias"; value: string; override: boolean }
+  | { type: "force-auto-update"; override: boolean }
+  | { type: "auto-update"; override: boolean; oldPath?: string };
 
 export class ForePlugin extends Plugin {
-	settings: ForePluginSettings;
+  settings: ForePluginSettings;
 
-	public async onload() {
-		await this.loadSettings();
+  public async onload() {
+    await this.loadSettings();
 
-		this.addSettingTab(new AutoFrontmatterSettingTab(this.app, this));
+    this.addSettingTab(new AutoFrontmatterSettingTab(this.app, this));
 
-		this.registerEvent(
-			this.app.workspace.on(
-				"file-menu",
-				(menu, abstract: FileSystemObject) => {
-					this.onFileMenu(menu, abstract);
-				}
-			)
-		);
+    this.registerEvents();
+    this.registerCommands();
+  }
 
-		this.registerEvent(
-			this.app.vault.on("create", (file: TFile) => {
-				logger.log("File Renamed", { basename: file.basename });
-				if (this.settings.tagFromFolderOnRename)
-					this.updateTagsFromPath(file);
-				if (this.settings.aliasFromNameOnRename)
-					this.updateAliasFromFilename(file, { override: false });
-			})
-		);
+  public onunload() {}
 
-		this.registerEvent(
-			this.app.vault.on("rename", (file: TFile) => {
-				logger.log("File Renamed", { basename: file.basename });
-				if (this.settings.tagFromFolderOnRename)
-					this.updateTagsFromPath(file);
-				if (this.settings.aliasFromNameOnRename)
-					this.updateAliasFromFilename(file, { override: false });
-			})
-		);
-		this.updateCommands();
-	}
+  private getContext(): Context {
+    return {
+      app: this.app,
+      settings: this.settings,
+      dispatch: this.fire.bind(this),
+    };
+  }
+  private registerEvents = registerEvents;
+  private registerCommands = registerCommands;
 
-	public onunload() {}
+  // Settings
+  private async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
 
-	private updateCommands() {
-		this.addCommand({
-			id: "update-tags-from-path",
-			name: "Update Tags from File Path",
-			editorCheckCallback: (
-				checking,
-				_editor: Editor,
-				view: MarkdownView
-			) => {
-				if (checking) {
-					return this.settings.enableTagsFromFolder;
-				}
-				this.updateTagsFromPath(view.file);
-			},
-		});
+  public async saveSettings() {
+    await this.saveData(this.settings);
+  }
 
-		this.addCommand({
-			id: "update-alias-from-name",
-			name: "Update Alias from File Name",
-			editorCheckCallback: (
-				checking,
-				_editor: Editor,
-				view: MarkdownView
-			) => {
-				if (checking) {
-					return this.settings.enableAliasFromName;
-				}
-				this.updateAliasFromFilename(view.file, { override: true });
-			},
-		});
+  // Events
+  public fire(event: ChangeEvent, file: TFile) {
+    logger.log("Event", file.basename, event);
+    if (event.type === "sort") {
+      changeFrontmatter(file, [{ action: "sort" }], this.getContext());
+    }
+    if (event.type === "add-tag") {
+      changeFrontmatter(
+        file,
+        [{ action: "tag-add", value: event.value }],
+        this.getContext()
+      );
+    }
+    if (event.type === "remove-tag") {
+      changeFrontmatter(
+        file,
+        [{ action: "tag-remove", value: event.value }],
+        this.getContext()
+      );
+    }
+    if (event.type === "replace-tag") {
+      changeFrontmatter(
+        file,
+        [
+          {
+            action: "tag-replace",
+            value: event.value,
+            oldValue: event.oldValue,
+          },
+        ],
+        this.getContext()
+      );
+    }
+    if (event.type === "set-alias") {
+      changeFrontmatter(
+        file,
+        [
+          {
+            action: event.override ? "alias-set" : "alias-add",
+            value: event.value,
+          },
+        ],
+        this.getContext()
+      );
+    }
+    if (event.type === "auto-update") {
+      const changes = changesFromFilename(
+        file,
+        { override: event.override, oldPath: event.oldPath },
+        this.getContext()
+      );
+      changeFrontmatter(file, changes, this.getContext());
+    }
+  }
 
-		this.addCommand({
-			id: "add-alias-to-frontmatter",
-			name: "Add Alias to Frontmatter",
-			editorCallback: (_editor: Editor, view: MarkdownView) => {
-				new UserEnteredTextModal(
-					this.app,
-					{ field: "Alias", callToAction: "Add" },
-					(value) => {
-						this.addAlias(view.file, value, true);
-					}
-				).open();
-			},
-		});
-
-		this.addCommand({
-			id: "add-tag-to-frontmatter",
-			name: "Add Tag to Frontmatter",
-			editorCallback: (_editor: Editor, view: MarkdownView) => {
-				new UserEnteredTextModal(
-					this.app,
-					{ field: "Tag", callToAction: "Add" },
-					(value) => {
-						this.addTag(view.file, value);
-					}
-				).open();
-			},
-		});
-	}
-
-	private onFileMenu(menu: Menu, abstract: FileSystemObject) {
-		menu.addSeparator();
-
-		menu.addItem((item) => {
-			item.setTitle("Fore: Add Tag")
-				.setIcon("document")
-				.onClick(async () => {
-					new UserEnteredTextModal(
-						this.app,
-						{ field: "Tag", callToAction: "Add" },
-						(value) => {
-							for (const file of walk(abstract)) {
-								this.addTag(file, value);
-							}
-						}
-					).open();
-				});
-		});
-
-		menu.addItem((item) => {
-			item.setTitle("Fore: Remove Tag")
-				.setIcon("document")
-				.onClick(async () => {
-					new UserEnteredTextModal(
-						this.app,
-						{ field: "Tag", callToAction: "Remove" },
-						(value) => {
-							for (const file of walk(abstract)) {
-								this.removeTag(file, value);
-							}
-						}
-					).open();
-				});
-		});
-
-		menu.addItem((item) => {
-			item.setTitle("Fore: Replace Tag")
-				.setIcon("document")
-				.onClick(async () => {
-					new ReplaceTagModal(this.app, ({ oldTag, newTag }) => {
-						for (const file of walk(abstract)) {
-							this.removeTag(file, oldTag, newTag);
-						}
-					}).open();
-				});
-		});
-
-		if (this.settings.enableTagsFromFolder) {
-			menu.addItem((item) => {
-				item.setTitle("Fore: Auto Update Tags")
-					.setIcon("document")
-					.onClick(async () => {
-						for (const file of walk(abstract)) {
-							this.updateTagsFromPath(file);
-						}
-					});
-			});
-		}
-
-		if (this.settings.enableAliasFromName) {
-			menu.addItem((item) => {
-				item.setTitle("Fore: Auto Update Alias")
-					.setIcon("document")
-					.onClick(async () => {
-						for (const file of walk(abstract)) {
-							this.updateAliasFromFilename(file, {
-								override: false,
-							});
-						}
-					});
-			});
-		}
-		menu.addSeparator();
-	}
-
-	private async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
-	}
-
-	public async saveSettings() {
-		await this.saveData(this.settings);
-	}
-
-	private updateTagsFromPath(file: TFile) {
-		const tagFromPath = formatToTagName(dirname(file.path));
-		if (!tagFromPath) {
-			return;
-		}
-		this.addTag(file, tagFromPath);
-	}
-
-	private addTag(file: TFile, tag: string) {
-		this.app.fileManager.processFrontMatter(
-			file,
-			(frontmatter: Record<string, unknown>) => {
-				const key = getUsedKey(frontmatter, ["tag", "tags"]);
-				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
-				const tags = parseFrontMatterTagsRaw(frontmatter);
-				const formattedTag = formatAsTag(tag);
-
-				if (tags.includes(formattedTag)) {
-					return;
-				}
-
-				logger.log(`Adding ${formattedTag} as tag`);
-				tags.push(formattedTag);
-
-				frontmatter[key] = formatAsCommaSeparated
-					? tags.join(", ")
-					: tags;
-			}
-		);
-	}
-
-	private removeTag(file: TFile, tag: string, newTag?: string) {
-		this.app.fileManager.processFrontMatter(
-			file,
-			(frontmatter: Record<string, unknown>) => {
-				const key = getUsedKey(frontmatter, ["tag", "tags"]);
-				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
-				const tags = parseFrontMatterTagsRaw(frontmatter);
-				const index = tags.findIndex(
-					(existingTag) => existingTag === tag
-				);
-				if (index === -1) return;
-
-				if (newTag) {
-					const formattedNewTag = formatAsTag(newTag);
-					tags.splice(index, 1, formattedNewTag);
-				} else {
-					tags.splice(index, 1);
-				}
-
-				if (tags.length === 0) {
-					delete frontmatter[key];
-				} else {
-					frontmatter[key] = formatAsCommaSeparated
-						? tags.join(", ")
-						: tags;
-				}
-			}
-		);
-	}
-
-	private updateAliasFromFilename(
-		file: TFile,
-		{ override }: { override: boolean }
-	) {
-		if (!this.settings.autoAliasPathMatch) return;
-
-		const getValuesFromName = createMatcher(
-			this.settings.autoAliasPathMatch
-		);
-		const values = getValuesFromName(file.basename);
-		if (!values || !values.name) {
-			logger.log("No name found");
-			return;
-		}
-		if (values.name === file.basename) {
-			logger.log("Name is the same as full name");
-			return;
-		}
-
-		this.addAlias(file, values.name, override);
-	}
-
-	private addAlias(file: TFile, alias: string, force = false) {
-		this.app.fileManager.processFrontMatter(
-			file,
-			(frontmatter: Record<string, unknown>) => {
-				const key = getUsedKey(frontmatter, ["alias", "aliases"]);
-				const formatAsCommaSeparated = !Array.isArray(frontmatter[key]);
-				const aliases = parseFrontMatterAliases(frontmatter) || [];
-				if (
-					!force &&
-					!this.settings.autoAliasEvenWhenExisting &&
-					aliases.length > 0
-				) {
-					logger.log("Alias already exists");
-					return;
-				}
-				if (!aliases.includes(alias)) {
-					logger.log(`Adding ${alias} as alias`);
-					aliases.push(alias);
-				}
-				frontmatter[key] = formatAsCommaSeparated
-					? aliases.join(", ")
-					: aliases;
-			}
-		);
-	}
+  showChangeTagModal(abstract: TAbstractFile) {
+    new UpdateTagModal(app, abstract, ({ action, value, oldValue }) => {
+      for (const file of walk(abstract)) {
+        if (action === "add") {
+          this.fire({ type: "add-tag", value }, file);
+        }
+        if (action === "remove") {
+          this.fire({ type: "remove-tag", value }, file);
+        }
+        if (action === "replace") {
+          if (!value) {
+            this.fire(
+              {
+                type: "remove-tag",
+                value: oldValue,
+              },
+              file
+            );
+          } else {
+            this.fire(
+              {
+                type: "replace-tag",
+                value,
+                oldValue,
+              },
+              file
+            );
+          }
+        }
+      }
+    }).open();
+  }
 }
