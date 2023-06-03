@@ -60,7 +60,11 @@ export function changeFrontmatter(
           delete frontmatter[change.field];
         }
 
-        if (change.action === "tag-add" && change.value) {
+        if (
+          change.action === "tag-add" &&
+          change.value &&
+          !tags.includes(change.value)
+        ) {
           tags.push(change.value);
         }
         if (change.action === "tag-replace" && tags.includes(change.oldValue)) {
@@ -75,7 +79,11 @@ export function changeFrontmatter(
             tags.splice(index, 1);
           }
         }
-        if (change.action === "alias-set" && change.value) {
+        if (
+          change.action === "alias-set" &&
+          change.value &&
+          !aliases.includes(change.value)
+        ) {
           aliases.push(change.value);
         }
         if (
